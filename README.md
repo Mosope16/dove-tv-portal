@@ -76,3 +76,6 @@ A full-scale broadcast network Operations Management System featuring studio boo
 - `/src/components` - Reusable UI components.
 - `/src/lib` - Utility functions, Prisma client, and external service configurations.
 - `/prisma` - Prisma schema definitions for the PostgreSQL database.
+## 📝 Context
+
+This project was built as an assignment for the engineering unit, designed to demonstrate a full-scale broadcast operations management system.
