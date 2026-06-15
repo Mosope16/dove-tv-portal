@@ -76,7 +76,3 @@ A full-scale broadcast network Operations Management System featuring studio boo
 - `/src/components` - Reusable UI components.
 - `/src/lib` - Utility functions, Prisma client, and external service configurations.
 - `/prisma` - Prisma schema definitions for the PostgreSQL database.
-
-## 📝 License
-
-This project is private and proprietary to Dove TV.
