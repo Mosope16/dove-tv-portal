@@ -1,0 +1,247 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. Roles & Statuses
+enum Role {
+  STAFF
+  PROG_ENG
+  ENG_MGR
+  MD_CEO
+  MFA
+  MM
+  MES
+  MP
+  HOU_ICT
+  HOU_EDITING_SUITE
+  HOU_MARKETING
+  HOU_CAMERA
+  HOU_PRESENTER
+  HOU_FINANCE
+  MCR_LIBRARIAN
+  MD_SECRETARY
+  DATA_CENTRE
+  WORKSHOP_ENGR
+  OLD_ARENA
+  NEW_ARENA
+  STREAMING_ROOM
+  HOU_MCR
+  VCR
+  SOCIAL_MEDIA
+}
+
+enum Status {
+  PENDING
+  HOU_APPROVED
+  APPROVED
+  RECEIVED
+  DENIED
+}
+
+enum FaultPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FaultStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum EquipmentCategory {
+  CAMERA
+  MONITOR
+  STREAMBOX
+  CABLES
+  MISC
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  CHECKED_OUT
+  IN_MAINTENANCE
+  RETIRED
+}
+
+enum CheckoutStatus {
+  PENDING
+  APPROVED
+  RETURNED
+  REJECTED
+  OVERDUE
+}
+
+// 2. The User Table
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  role           Role            @default(STAFF)
+  isOutOfOffice  Boolean         @default(false)
+  
+  // Relationships (Who booked what)
+  bookings           StudioBooking[] @relation("Requester")
+  approved           StudioBooking[] @relation("Approver")
+  
+  marketingBookings  MarketingJob[]  @relation("MarketingRequester")
+  marketingApproved  MarketingJob[]  @relation("MarketingApprover")
+
+  notifications      Notification[]  @relation("UserNotifications")
+
+  equipmentRequests  EquipmentCheckout[] @relation("EquipmentRequester")
+  equipmentApprovals EquipmentCheckout[] @relation("EquipmentApprover")
+
+  dutyShifts         DutyRoster[] @relation("DutyEngineer")
+  dutyCreated        DutyRoster[] @relation("DutyCreatedBy")
+
+  faultReports       FaultReport[] @relation("FaultReporter")
+  assignedFaults     FaultReport[] @relation("FaultAssignee")
+}
+
+// 3. The Studio Booking Table
+model StudioBooking {
+  id                String   @id @default(cuid())
+  progName          String
+  dateOfRecording   DateTime
+  timeOfRecording   String
+  duration          String
+  mode              String   // LIVE or PRE_RECORDED
+  producer          String
+  presenter         String   @default("N/A")
+  status            Status   @default(PENDING)
+  
+  // Linking back to the User table
+  requesterId       String
+  requester         User     @relation("Requester", fields: [requesterId], references: [id])
+  
+  approverId        String?
+  approver          User?    @relation("Approver", fields: [approverId], references: [id])
+  
+  producerEmail     String?  // Optional email for direct reminder
+  presenterEmail    String?  // Optional email for direct reminder
+  reminderSent      Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+}
+
+// 4. The Marketing Job Table
+model MarketingJob {
+  id                String   @id @default(cuid())
+  location          String
+  dateOfAssignment  DateTime
+  timeOfAssignment  String
+  jobDescription    String
+  status            Status   @default(PENDING)
+  
+  // Linking back to the User table
+  requesterId       String
+  requester         User     @relation("MarketingRequester", fields: [requesterId], references: [id])
+  
+  approverId        String?
+  approver          User?    @relation("MarketingApprover", fields: [approverId], references: [id])
+  
+  createdAt         DateTime @default(now())
+}
+
+// 5. Notification Table
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserNotifications", fields: [userId], references: [id])
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+}
+
+// 8. Engineer Duty Roster
+model DutyRoster {
+  id          String   @id @default(cuid())
+  date        DateTime // Stored as midnight UTC for the day
+  notes       String?
+
+  engineerId  String
+  engineer    User     @relation("DutyEngineer", fields: [engineerId], references: [id])
+
+  createdById String
+  createdBy   User     @relation("DutyCreatedBy", fields: [createdById], references: [id])
+
+  createdAt   DateTime @default(now())
+
+  @@unique([date, engineerId])
+}
+
+// 6. Equipment (Physical Assets)
+model Equipment {
+  id                String            @id @default(cuid())
+  name              String
+  serialNumber      String?
+  category          EquipmentCategory @default(MISC)
+  status            EquipmentStatus   @default(AVAILABLE)
+  condition         String?
+  notes             String?
+  quantity          Int               @default(1)
+  availableQuantity Int               @default(1)
+  
+  checkouts    EquipmentCheckout[]
+  
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+// 7. Equipment Checkout Transaction
+model EquipmentCheckout {
+  id                 String         @id @default(cuid())
+  
+  equipmentId        String
+  equipment          Equipment      @relation(fields: [equipmentId], references: [id])
+  
+  requesterId        String
+  requester          User           @relation("EquipmentRequester", fields: [requesterId], references: [id])
+  
+  approverId         String?
+  approver           User?          @relation("EquipmentApprover", fields: [approverId], references: [id])
+  
+  status             CheckoutStatus @default(PENDING)
+  quantityRequested  Int            @default(1)
+  
+  expectedReturnDate DateTime
+  actualReturnDate   DateTime?
+  
+  checkoutNotes      String?
+  
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+// 9. Fault Reports / IT Tickets
+model FaultReport {
+  id           String        @id @default(cuid())
+  title        String
+  description  String
+  location     String        // e.g. "Studio A", "OB Van", "Control Room"
+  priority     FaultPriority @default(MEDIUM)
+  status       FaultStatus   @default(OPEN)
+
+  reporterId   String
+  reporter     User          @relation("FaultReporter", fields: [reporterId], references: [id])
+
+  assigneeId   String?
+  assignee     User?         @relation("FaultAssignee", fields: [assigneeId], references: [id])
+
+  resolvedNote String?       // Note added when marking resolved
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
